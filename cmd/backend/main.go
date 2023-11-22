@@ -8,6 +8,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/LogBustersHackathon/backend/model"
+
 	"github.com/LogBustersHackathon/backend/internal/kafka"
 	"github.com/LogBustersHackathon/backend/internal/nats"
 	"github.com/LogBustersHackathon/backend/internal/processor"
@@ -36,8 +38,8 @@ func main() {
 	flag.StringVar(&natsStream, "nats-stream", "logbusters", "NATS stream name")
 	flag.StringVar(&natsSubject, "nats-subject", "alarms", "NATS subject name")
 	flag.StringVar(&natsConsumer, "nats-consumer", "server", "NATS consumer name")
-	flag.StringVar(&kafkaAddress, "kafka-address", "", "Kafka server address")
-	flag.StringVar(&kafkaTopic, "kafka-topic", "", "Kafka topic name")
+	flag.StringVar(&kafkaAddress, "kafka-address", "192.168.1.66:9092", "Kafka server address")
+	flag.StringVar(&kafkaTopic, "kafka-topic", "vmqueue", "Kafka topic name")
 	flag.StringVar(&kafkaMechanism, "kafka-mechanism", "", "Kafka mechanism. 256 or 512")
 	flag.StringVar(&kafkaUsername, "kafka-username", "", "Kafka username")
 	flag.StringVar(&kafkaPassword, "kafka-password", "", "Kafka password")
@@ -79,8 +81,8 @@ func Application(closingChn chan struct{}) {
 		os.Exit(1)
 	}
 
-	processChn := make(chan struct{})
-	publishChn := make(chan struct{})
+	processChn := make(chan []model.KafkaAlarm)
+	publishChn := make(chan model.AlarmResponse)
 
 	go func() {
 		err := kafka.SubscribeTopic(closingChn, processChn, kafkaAddress, kafkaTopic, kafkaMechanism, kafkaUsername, kafkaPassword)

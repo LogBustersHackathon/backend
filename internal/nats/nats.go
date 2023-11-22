@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/LogBustersHackathon/backend/model"
+	"github.com/LogBustersHackathon/backend/utils"
+
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
-	client "github.com/nats-io/nats.go"
 )
 
 type Helper struct {
 	s             *server.Server
-	jsc           client.JetStreamContext
+	jsc           nats.JetStreamContext
 	host          string
 	username      string
 	password      string
@@ -74,7 +76,7 @@ func (h *Helper) CreateStream() error {
 		return errors.New("server is not ready for connections")
 	}
 
-	conn, err := client.Connect(fmt.Sprintf("ws://%s:%d", h.host, h.websocketPort))
+	conn, err := nats.Connect(fmt.Sprintf("ws://%s:%d", h.host, h.websocketPort))
 	if err != nil {
 		return err
 	}
@@ -85,7 +87,7 @@ func (h *Helper) CreateStream() error {
 	}
 
 	streamInfo, err := h.jsc.StreamInfo(h.stream)
-	if err != nil && err != client.ErrStreamNotFound {
+	if err != nil && err != nats.ErrStreamNotFound {
 		return err
 	}
 
@@ -93,7 +95,7 @@ func (h *Helper) CreateStream() error {
 		return nil
 	}
 
-	_, err = h.jsc.AddStream(&client.StreamConfig{
+	_, err = h.jsc.AddStream(&nats.StreamConfig{
 		Name:     h.stream,
 		Subjects: h.subjects,
 	})
@@ -122,7 +124,7 @@ func (h *Helper) CreateConsumer() error {
 	return err
 }
 
-func (h *Helper) Publisher(closingChn chan struct{}, publishChn chan struct{}) error {
+func (h *Helper) Publisher(closingChn chan struct{}, publishChn chan model.AlarmResponse) error {
 	if h.s == nil {
 		return errors.New("server is not started")
 	}
@@ -138,8 +140,13 @@ taskLoop:
 		select {
 		case <-closingChn:
 			break taskLoop
-		case _ = <-publishChn:
-			_, err := h.jsc.Publish(subject, nil)
+		case alarm := <-publishChn:
+			data, err := utils.ConvertToJSON(alarm)
+			if err != nil {
+				continue taskLoop
+			}
+
+			_, err = h.jsc.Publish(subject, data)
 			if err != nil {
 				return err
 			}

@@ -5,14 +5,19 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/LogBustersHackathon/backend/model"
+	"github.com/LogBustersHackathon/backend/utils"
+
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"
 )
 
-func SubscribeTopic(closerChn chan struct{}, processChn chan struct{}, address string, topic string, mechanism string, username string, password string) (err error) {
+func SubscribeTopic(closerChn chan struct{}, processChn chan []model.KafkaAlarm, address string, topic string, mechanism string, username string, password string) (err error) {
 	config := kafka.ReaderConfig{}
 	config.Brokers = []string{address}
 	config.Topic = topic
+
+	config.Dialer = &kafka.Dialer{}
 
 	if username != "" && password != "" {
 		var algorithm scram.Algorithm
@@ -28,7 +33,7 @@ func SubscribeTopic(closerChn chan struct{}, processChn chan struct{}, address s
 		if err != nil {
 			return err
 		}
-		config.Dialer = &kafka.Dialer{SASLMechanism: m}
+		config.Dialer.SASLMechanism = m
 	}
 
 	reader := kafka.NewReader(config)
@@ -49,14 +54,21 @@ taskLoop:
 				break taskLoop
 			}
 
-			// TODO parse message and send to processor channel
-			data := struct{}{}
+			value := []byte(nil)
+			value = append(value, '[')
+			value = append(value, m.Value...)
+			value = append(value, ']')
+
+			data, err := utils.ConvertFromJSON[[]model.KafkaAlarm](value)
+			if err != nil {
+				continue taskLoop
+			}
 
 			processChn <- data
 
 			err = reader.CommitMessages(ctx, m)
 			if err != nil {
-				break taskLoop
+				continue taskLoop
 			}
 		}
 
