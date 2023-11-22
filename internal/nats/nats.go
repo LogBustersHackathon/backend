@@ -14,6 +14,7 @@ import (
 
 type Helper struct {
 	s             *server.Server
+	c             *nats.Conn
 	jsc           nats.JetStreamContext
 	host          string
 	username      string
@@ -25,12 +26,12 @@ type Helper struct {
 	websocketPort int
 }
 
-func StartServer(closingChn chan struct{}, host string, port int, username string, password string,
-	stream string, subjects []string, consumer string) (*Helper, error) {
+func StartServer(closingChn chan struct{}, host string, port int, websocketPort int,
+	username string, password string, stream string, subjects []string, consumer string) (*Helper, error) {
 	h := &Helper{}
 	h.host = host
 	h.natsPort = port
-	h.websocketPort = port + 1
+	h.websocketPort = websocketPort
 	h.username = username
 	h.password = password
 	h.stream = stream
@@ -67,24 +68,32 @@ func StartServer(closingChn chan struct{}, host string, port int, username strin
 	return h, nil
 }
 
+func (h *Helper) CreateConnection() error {
+	conn, err := nats.Connect(fmt.Sprintf("ws://%s:%d", h.host, h.websocketPort))
+	if err != nil {
+		return err
+	}
+
+	h.c = conn
+
+	return nil
+}
+
 func (h *Helper) CreateStream() error {
-	if h.s == nil {
-		return errors.New("server is not started")
+	if h.s == nil || h.c == nil {
+		return errors.New("server is not started or connection is not initialized")
 	}
 
 	if !h.s.ReadyForConnections(time.Second * 10) {
 		return errors.New("server is not ready for connections")
 	}
 
-	conn, err := nats.Connect(fmt.Sprintf("ws://%s:%d", h.host, h.websocketPort))
+	jsc, err := h.c.JetStream()
 	if err != nil {
 		return err
 	}
 
-	h.jsc, err = conn.JetStream()
-	if err != nil {
-		return err
-	}
+	h.jsc = jsc
 
 	streamInfo, err := h.jsc.StreamInfo(h.stream)
 	if err != nil && err != nats.ErrStreamNotFound {
@@ -146,7 +155,16 @@ taskLoop:
 				continue taskLoop
 			}
 
-			_, err = h.jsc.Publish(subject, data)
+			if h.jsc != nil {
+				_, err = h.jsc.Publish(subject, data)
+				if err != nil {
+					return err
+				}
+
+				continue taskLoop
+			}
+
+			err = h.c.Publish(subject, data)
 			if err != nil {
 				return err
 			}

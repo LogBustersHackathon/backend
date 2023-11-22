@@ -16,26 +16,28 @@ import (
 )
 
 var (
-	natsHost       string
-	natsPort       int
-	natsUsername   string
-	natsPassword   string
-	natsStream     string
-	natsSubject    string
-	natsConsumer   string
-	kafkaAddress   string
-	kafkaTopic     string
-	kafkaMechanism string
-	kafkaUsername  string
-	kafkaPassword  string
+	natsHost          string
+	natsPort          int
+	natsWebsocketPort int
+	natsUsername      string
+	natsPassword      string
+	natsStream        string
+	natsSubject       string
+	natsConsumer      string
+	kafkaAddress      string
+	kafkaTopic        string
+	kafkaMechanism    string
+	kafkaUsername     string
+	kafkaPassword     string
 )
 
 func main() {
 	flag.StringVar(&natsHost, "nats-host", "0.0.0.0", "NATS server host")
 	flag.IntVar(&natsPort, "nats-port", 4222, "NATS server port")
+	flag.IntVar(&natsWebsocketPort, "nats-websocket-port", 4223, "NATS server websocket port")
 	flag.StringVar(&natsUsername, "nats-username", "", "NATS username")
 	flag.StringVar(&natsPassword, "nats-password", "", "NATS password")
-	flag.StringVar(&natsStream, "nats-stream", "logbusters", "NATS stream name")
+	flag.StringVar(&natsStream, "nats-stream", "", "NATS stream name")
 	flag.StringVar(&natsSubject, "nats-subject", "alarms", "NATS subject name")
 	flag.StringVar(&natsConsumer, "nats-consumer", "server", "NATS consumer name")
 	flag.StringVar(&kafkaAddress, "kafka-address", "192.168.1.66:9092", "Kafka server address")
@@ -63,22 +65,40 @@ func main() {
 }
 
 func Application(closingChn chan struct{}) {
-	h, err := nats.StartServer(closingChn, natsHost, natsPort, natsUsername, natsPassword, natsStream, []string{natsSubject}, natsConsumer)
+	if natsSubject == "" {
+		fmt.Printf("NATS subject name is required\n")
+		os.Exit(1)
+	}
+
+	if kafkaTopic == "" {
+		fmt.Printf("Kafka topic name is required\n")
+		os.Exit(1)
+	}
+
+	h, err := nats.StartServer(closingChn, natsHost, natsPort, natsWebsocketPort, natsUsername, natsPassword, natsStream, []string{natsSubject}, natsConsumer)
 	if err != nil {
 		fmt.Printf("Error starting NATS server: %v\n", err)
 		os.Exit(1)
 	}
 
-	err = h.CreateStream()
+	err = h.CreateConnection()
 	if err != nil {
-		fmt.Printf("Error creating NATS stream: %v\n", err)
+		fmt.Printf("Error creating NATS connection: %v\n", err)
 		os.Exit(1)
 	}
 
-	err = h.CreateConsumer()
-	if err != nil {
-		fmt.Printf("Error creating NATS consumer: %v\n", err)
-		os.Exit(1)
+	if natsStream != "" && natsConsumer != "" {
+		err = h.CreateStream()
+		if err != nil {
+			fmt.Printf("Error creating NATS stream: %v\n", err)
+			os.Exit(1)
+		}
+
+		err = h.CreateConsumer()
+		if err != nil {
+			fmt.Printf("Error creating NATS consumer: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	processChn := make(chan []model.KafkaAlarm)
