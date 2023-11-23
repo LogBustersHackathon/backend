@@ -1,6 +1,7 @@
 package nats
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"time"
@@ -17,6 +18,8 @@ type Helper struct {
 	c             *nats.Conn
 	jsc           nats.JetStreamContext
 	host          string
+	certFile      string
+	keyFile       string
 	username      string
 	password      string
 	stream        string
@@ -26,12 +29,14 @@ type Helper struct {
 	websocketPort int
 }
 
-func StartServer(closingChn chan struct{}, host string, port int, websocketPort int,
-	username string, password string, stream string, subjects []string, consumer string) (*Helper, error) {
+func StartServer(closingChn chan struct{}, host string, port int, websocketPort int, username string, password string,
+	stream string, subjects []string, consumer string, certFile string, keyFile string) (*Helper, error) {
 	h := &Helper{}
 	h.host = host
 	h.natsPort = port
 	h.websocketPort = websocketPort
+	h.certFile = certFile
+	h.keyFile = keyFile
 	h.username = username
 	h.password = password
 	h.stream = stream
@@ -41,15 +46,30 @@ func StartServer(closingChn chan struct{}, host string, port int, websocketPort 
 	opts := server.Options{}
 	opts.Host = h.host
 	opts.Port = h.natsPort
-	opts.Username = h.username
-	opts.Password = h.password
-	opts.JetStream = true
 	opts.Websocket = server.WebsocketOpts{}
 	opts.Websocket.Host = h.host
 	opts.Websocket.Port = h.websocketPort
-	opts.Websocket.Username = h.username
-	opts.Websocket.Password = h.password
-	opts.Websocket.NoTLS = true
+
+	if h.username != "" && h.password != "" {
+		opts.Username = h.username
+		opts.Password = h.password
+		opts.Websocket.Username = h.username
+		opts.Websocket.Password = h.password
+	}
+
+	if h.stream != "" {
+		opts.JetStream = true
+	}
+
+	if h.certFile != "" && h.keyFile != "" {
+		cert, err := tls.LoadX509KeyPair(h.certFile, h.keyFile)
+		if err != nil {
+			return nil, err
+		}
+		opts.Websocket.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}, InsecureSkipVerify: true}
+	} else {
+		opts.Websocket.NoTLS = true
+	}
 
 	s, err := server.NewServer(&opts)
 	if err != nil {
@@ -71,7 +91,21 @@ func StartServer(closingChn chan struct{}, host string, port int, websocketPort 
 }
 
 func (h *Helper) CreateConnection() error {
-	conn, err := nats.Connect(fmt.Sprintf("ws://%s:%d", h.host, h.websocketPort))
+	var opts []nats.Option
+
+	if h.username != "" && h.password != "" {
+		opts = append(opts, nats.UserInfo(h.username, h.password))
+	}
+
+	if h.certFile != "" && h.keyFile != "" {
+		cert, err := tls.LoadX509KeyPair(h.certFile, h.keyFile)
+		if err != nil {
+			return err
+		}
+		opts = append(opts, nats.Secure(&tls.Config{Certificates: []tls.Certificate{cert}, InsecureSkipVerify: true}))
+	}
+
+	conn, err := nats.Connect(fmt.Sprintf("ws://%s:%d", h.host, h.websocketPort), opts...)
 	if err != nil {
 		return err
 	}

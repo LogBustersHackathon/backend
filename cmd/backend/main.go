@@ -19,6 +19,8 @@ var (
 	natsHost          string
 	natsPort          int
 	natsWebsocketPort int
+	natsTLSCert       string
+	natsTLSKey        string
 	natsUsername      string
 	natsPassword      string
 	natsStream        string
@@ -35,6 +37,8 @@ func main() {
 	flag.StringVar(&natsHost, "nats-host", "0.0.0.0", "NATS server host")
 	flag.IntVar(&natsPort, "nats-port", 4222, "NATS server port")
 	flag.IntVar(&natsWebsocketPort, "nats-websocket-port", 4223, "NATS server websocket port")
+	flag.StringVar(&natsTLSCert, "nats-tls-cert", "ca.crt", "NATS TLS certificate file")
+	flag.StringVar(&natsTLSKey, "nats-tls-key", "ca.key", "NATS TLS key file")
 	flag.StringVar(&natsUsername, "nats-username", "", "NATS username")
 	flag.StringVar(&natsPassword, "nats-password", "", "NATS password")
 	flag.StringVar(&natsStream, "nats-stream", "", "NATS stream name")
@@ -75,11 +79,13 @@ func Application(closingChn chan struct{}) {
 		os.Exit(1)
 	}
 
-	h, err := nats.StartServer(closingChn, natsHost, natsPort, natsWebsocketPort, natsUsername, natsPassword, natsStream, []string{natsSubject}, natsConsumer)
+	h, err := nats.StartServer(closingChn, natsHost, natsPort, natsWebsocketPort, natsUsername, natsPassword, natsStream, []string{natsSubject}, natsConsumer, natsTLSCert, natsTLSKey)
 	if err != nil {
 		fmt.Printf("Error starting NATS server: %v\n", err)
 		os.Exit(1)
 	}
+
+	time.Sleep(time.Second * 2)
 
 	err = h.CreateConnection()
 	if err != nil {
@@ -108,7 +114,7 @@ func Application(closingChn chan struct{}) {
 		err := kafka.SubscribeTopic(closingChn, processChn, kafkaAddress, kafkaTopic, kafkaMechanism, kafkaUsername, kafkaPassword)
 		if err != nil {
 			fmt.Printf("Error subscribing to Kafka topic: %v\n", err)
-			os.Exit(1)
+			// os.Exit(1)
 		}
 	}()
 
@@ -116,7 +122,7 @@ func Application(closingChn chan struct{}) {
 		err := processor.Process(closingChn, processChn, publishChn)
 		if err != nil {
 			fmt.Printf("Error processing messages: %v\n", err)
-			os.Exit(1)
+			// os.Exit(1)
 		}
 	}()
 
@@ -124,7 +130,7 @@ func Application(closingChn chan struct{}) {
 		err := h.Publisher(closingChn, publishChn)
 		if err != nil {
 			fmt.Printf("Error publishing to NATS: %v\n", err)
-			os.Exit(1)
+			// os.Exit(1)
 		}
 	}()
 }
