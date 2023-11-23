@@ -66,6 +66,8 @@ taskLoop:
 				continue taskLoop
 			}
 
+			fmt.Printf("Received new alarm...\n")
+
 			processChn <- data
 
 			err = reader.CommitMessages(ctx, m)
