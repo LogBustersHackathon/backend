@@ -21,10 +21,6 @@ taskLoop:
 		case alarms := <-processChn:
 		alarmLoop:
 			for _, alarm := range alarms {
-				if alarm.Int1 != 439 {
-					continue alarmLoop
-				}
-
 				if !utils.Contains(whitelist, int(alarm.DeviceID)) {
 					continue alarmLoop
 				}
@@ -34,10 +30,6 @@ taskLoop:
 				data.Owner = strconv.FormatInt(alarm.DeviceID, 10)
 				data.Status = model.Critical
 				data.Value = strconv.FormatInt(alarm.Int2, 10)
-
-				if alarm.Int2 < 80 {
-					continue alarmLoop
-				}
 
 				fmt.Printf("Processing new alarm...\n")
 
