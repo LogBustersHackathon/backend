@@ -65,6 +65,8 @@ func StartServer(closingChn chan struct{}, host string, port int, websocketPort 
 		h.s.Shutdown()
 	}()
 
+	fmt.Printf("NATS server is running on %s:%d\n", h.host, h.natsPort)
+
 	return h, nil
 }
 
@@ -144,6 +146,8 @@ func (h *Helper) Publisher(closingChn chan struct{}, publishChn chan model.Alarm
 
 	subject := h.subjects[0]
 
+	fmt.Printf("Publishing to subject %s\n", subject)
+
 taskLoop:
 	for {
 		select {
@@ -161,6 +165,8 @@ taskLoop:
 					return err
 				}
 
+				fmt.Printf("Published new alarm...\n")
+
 				continue taskLoop
 			}
 
@@ -168,6 +174,8 @@ taskLoop:
 			if err != nil {
 				return err
 			}
+
+			fmt.Printf("Published new alarm...\n")
 		}
 	}
 

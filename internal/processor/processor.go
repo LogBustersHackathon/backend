@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/LogBustersHackathon/backend/model"
@@ -10,13 +11,14 @@ import (
 var whitelist = []int{7014, 8193, 8192}
 
 func Process(closingChn chan struct{}, processChn chan []model.KafkaAlarm, publishChn chan model.AlarmResponse) (err error) {
+	fmt.Printf("Processing messages...\n")
+
 taskLoop:
 	for {
 		select {
 		case <-closingChn:
 			break taskLoop
 		case alarms := <-processChn:
-			// temp := make(map[int64][]model.KafkaAlarm)
 		alarmLoop:
 			for _, alarm := range alarms {
 				if alarm.Int1 != 439 {
@@ -33,14 +35,14 @@ taskLoop:
 				data.Status = model.Critical
 				data.Value = strconv.FormatInt(alarm.Int2, 10)
 
+				if alarm.Int2 < 80 {
+					continue alarmLoop
+				}
+
+				fmt.Printf("Processing new alarm...\n")
+
 				publishChn <- data
-
-				// temp[alarm.DeviceID] = append(temp[alarm.DeviceID], alarm)
 			}
-
-			// TODO: Process alarm here and send to NATS
-
-			// publishChn <- struct{}{}
 		}
 	}
 

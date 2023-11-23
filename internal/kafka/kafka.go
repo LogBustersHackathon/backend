@@ -43,6 +43,8 @@ func SubscribeTopic(closerChn chan struct{}, processChn chan []model.KafkaAlarm,
 
 	ctx := context.Background()
 
+	fmt.Printf("Subscribing to topic %s\n", topic)
+
 taskLoop:
 	for {
 		select {
